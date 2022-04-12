@@ -125,11 +125,11 @@
         }
 
         $(document).ready(function() {
-            $("#InputWidth").val(20);
+            $("#InputWidth").val(40);
             $("#InputLength").val(30);
             $("#InputTurningRadius").val(3);
             $("#InputMachineWidth").val(2);
-            let maxHeight = $("#field_bounds").attr('width');
+            let maxHeight = $("#field_bounds").attr('height');
 
             $("#input_param").submit(function(e){
                 let pattern = $("#SelectPattern").val();
@@ -139,6 +139,7 @@
 
                 let machineWidth = $("#InputMachineWidth").val()*factor;
                 let minTuringRadius = $("#InputTurningRadius").val()*factor;
+                let headlandHeight = Math.max(machineWidth, minTuringRadius);
 
                 let tracks_max = Math.floor($("#InputWidth").val()/$("#InputMachineWidth").val());
                 console.log("#max track: " + tracks_max);
@@ -155,7 +156,7 @@
                 let start_point = $("#SelectStartPoint").val();
                 switch (start_point) {
                     case "sw":
-                        trajectory_points += "M" + Math.round(machineWidth/2)+ ","
+                        trajectory_points += "M " + Math.round(machineWidth/2)+ ","
                             + Math.round($("#field_bounds").attr('height')-machineWidth)+ " "
                             + Math.round(machineWidth/2)+ ","
                             + Math.round(machineWidth);
@@ -168,29 +169,27 @@
                         break;
                 }
                 console.log(tracksPattern(pattern, tracks_max));
-                /*switch (pattern) {
-                    case "CNT":
-                        trajectory_points += " c 0,-"+machineWidth+" "+machineWidth+",-"+machineWidth
-                                            +" "+machineWidth+",0"
-                        trajectory_points += " l 0,"+track_length;
-                        $("#trajectory").attr('d', trajectory_points);
-                        break;
-                    case "SFP":
-                        break;
-                }*/
+
                 let opt_pattern = tracksPattern(pattern, tracks_max);
-                let direction = 1; // 1 for CW, -1 for CCW
+                let direction = 1; // 1 for UP, -1 for DOWN
+                let CW = 1;
                 for(var i=0; i<opt_pattern.length-1; i++) {
                     let turning_radius = (machineWidth<minTuringRadius)? minTuringRadius: machineWidth;
                     let lat_distance = (opt_pattern[i+1] - opt_pattern[i])*machineWidth;
-                    trajectory_points += " c 0,"+(-1*direction*turning_radius)+
-                                        //" "+(direction*turning_radius)+","+(-1*direction*turning_radius)+
-                                        //" l "+(lat_distance-2*turning_radius)+",0"+
-                                        //" c "+(direction*turning_radius)+","+(-1*direction*turning_radius)
-                                        " "+lat_distance+","+(-1*direction*turning_radius)+
-                                        " "+lat_distance+",0"
+                    let lat_dist_dir = Math.abs(lat_distance)/lat_distance;
+                    CW = Math.max(0, direction*lat_dist_dir);
+                    trajectory_points += " a "+turning_radius+","+turning_radius+" 90"+
+                                        " 0 "+CW+
+                                        " "+(lat_dist_dir*turning_radius)+","+(-1*direction*turning_radius)+
+                                        " l "+(lat_distance-2*lat_dist_dir*turning_radius)+",0"+
+                                        " a "+turning_radius+","+turning_radius+" 90"+
+                                        " 0 "+CW+
+                                        " "+(lat_dist_dir*turning_radius)+","+(direction*turning_radius)
+                                        //" "+lat_distance+","+(-1*direction*turning_radius)+
+                                        //" "+lat_distance+",0"
                     trajectory_points += " l 0,"+(direction*track_length);
                     direction *= -1;
+
                     $("#trajectory").attr('d', trajectory_points);
 
                 }
@@ -273,7 +272,7 @@
             <div class="col-8">
                 <h4></h4>
                 <svg id="viewport" viewBox="0 0 180 120" xmlns="http://www.w3.org/2000/svg">
-                    <rect id="field_bounds" width="120" height="120" fill="#00aa00" />
+                    <rect id="field_bounds" width="120" height="120" fill="#00aa00" style="margin-top: 2px" />
                     <g id="guided_lines"></g>
                     <!--polyline id="trajectory" points="0,0 50,25 50,75 100,0"
                               fill="none" stroke="yellow" /-->
