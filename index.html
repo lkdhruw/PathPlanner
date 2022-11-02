@@ -7,6 +7,20 @@
     <script src="js/bootstrap.js"></script>
     <link rel="stylesheet" href="css/bootstrap.css">
     <script src="js/jquery-3.6.0.min.js"></script>
+
+    <style>
+        .form-control {
+            /*
+            display: inline-block;;
+            margin-top: 5px;
+            margin-left: 5px;
+            min-width: 100px;
+            alignment: right;
+
+             */
+        }
+    </style>
+
     <script>
 
         function getNode(n, v) {
@@ -129,37 +143,67 @@
             $("#InputLength").val(30);
             $("#InputTurningRadius").val(3);
             $("#InputMachineWidth").val(2);
+            $("#RearAdjustment").val(0);
+            $("#FrontAdjustment").val(0);
+
             let maxHeight = $("#field_bounds").attr('height');
+            $("#info_panel").append("<div>Max height: "+maxHeight+"</div>");
 
             $("#input_param").submit(function(e){
+                $("#info_panel").html("");
                 let pattern = $("#SelectPattern").val();
                 let factor = maxHeight/parseFloat($("#InputLength").val());
                 $("#field_bounds").attr('width', $("#InputWidth").val()*factor);
                 $("#field_bounds").attr('height', $("#InputLength").val()*factor);
+                $("#info_panel").append("<div>factor: "+factor+"x</div>");
 
                 let machineWidth = $("#InputMachineWidth").val()*factor;
                 let minTuringRadius = $("#InputTurningRadius").val()*factor;
-                let headlandHeight = Math.max(machineWidth, minTuringRadius);
+                let headlandHeight = Math.max(machineWidth, minTuringRadius+0.5*machineWidth);
+                $("#info_panel").append("<div>Headland height: "+headlandHeight/factor+" m</div>");
 
                 let tracks_max = Math.floor($("#InputWidth").val()/$("#InputMachineWidth").val());
                 console.log("#max track: " + tracks_max);
-                let track_length = $("#field_bounds").attr('height')-2*machineWidth;
+                $("#info_panel").append("<div>#Tracks: "+tracks_max+" m</div>");
+
+                let track_length = $("#field_bounds").attr('height')-2*headlandHeight;
+                $("#info_panel").append("<div>Track length: "+track_length+" m</div>");
                 var gLines = document.getElementById("guided_lines");
                 gLines.innerHTML = "";
+                var nodes = document.getElementById("nodes");
+                nodes.innerHTML = "";
+
+                gLines.appendChild(getNode('line', {
+                    x1:0,y1:headlandHeight,
+                    x2:$("#InputWidth").val()*factor,y2: headlandHeight,
+                    stroke:'#ffffff','stroke-width':0.25, 'stroke-dasharray':'1 4'}));
+                gLines.appendChild(getNode('line', {
+                    x1:0,y1:track_length+headlandHeight,
+                    x2:$("#InputWidth").val()*factor,y2: track_length+headlandHeight,
+                    stroke:'#ffffff','stroke-width':0.25, 'stroke-dasharray':'1 4'}));
                 for(var i=0; i<=tracks_max; i++) {
                     gLines.appendChild(getNode('line', {
-                        x1:machineWidth*i,y1:machineWidth,
-                        x2:machineWidth*i,y2: $("#field_bounds").attr('height')-machineWidth,
-                        stroke:'#ffffff','stroke-width':1, 'stroke-dasharray':'4 2'}));
+                        x1:machineWidth*i,y1: track_length+headlandHeight,
+                        x2:machineWidth*i,y2: headlandHeight,
+                        stroke:'#ffffff','stroke-width':0.5, 'stroke-dasharray':'2 4'}));
                 }
                 let trajectory_points = "";
                 let start_point = $("#SelectStartPoint").val();
+                let start_node = {};
+                let end_node = {};
                 switch (start_point) {
                     case "sw":
                         trajectory_points += "M " + Math.round(machineWidth/2)+ ","
-                            + Math.round($("#field_bounds").attr('height')-machineWidth)+ " "
+                            + Math.round(track_length+headlandHeight)+ " "
                             + Math.round(machineWidth/2)+ ","
-                            + Math.round(machineWidth);
+                            + Math.round(headlandHeight);
+                        start_node = {
+                            cx: Math.round(machineWidth/2),
+                            cy: Math.round(track_length+headlandHeight),
+                            r: 1,
+                            fill: 'green',
+                            stroke: 'yellow', 'stroke-width': 0.25
+                        };
                         break;
                     case "nw":
                         break;
@@ -168,30 +212,92 @@
                     case "se":
                         break;
                 }
-                console.log(tracksPattern(pattern, tracks_max));
 
                 let opt_pattern = tracksPattern(pattern, tracks_max);
-                let direction = 1; // 1 for UP, -1 for DOWN
+                console.log(opt_pattern);
+                $("#info_panel").append("<div>Fieldwork Pattern: "+opt_pattern+"</div>");
+
+                let turning_models = {
+                    pi_cross: 0,
+                    pi_sigma: 1,
+                    pi_open: 2,
+                    pi_open_sigma: 3
+                }
+                let turning_model = turning_models.pi_cross;
+
+                let direction = 1; // 1 for UP (SVG - direction), -1 for DOWN
                 let CW = 1;
+                let turning_radius = minTuringRadius;
+                let sg_turn_ang_0 = Math.acos((2*turning_radius+machineWidth)/(4*turning_radius)); // radian
+
+                $("#info_panel").append("<div>sg_turn_ang_0: "+sg_turn_ang_0*180/Math.PI+"</div>");
                 for(var i=0; i<opt_pattern.length-1; i++) {
-                    let turning_radius = (machineWidth<minTuringRadius)? minTuringRadius: machineWidth;
+                    // let turning_radius = (machineWidth<minTuringRadius)? minTuringRadius: machineWidth;
+                    turning_radius = minTuringRadius;
                     let lat_distance = (opt_pattern[i+1] - opt_pattern[i])*machineWidth;
-                    let lat_dist_dir = Math.abs(lat_distance)/lat_distance;
+                    let lat_dist_dir = Math.abs(lat_distance)/lat_distance; // rightward or leftward
                     CW = Math.max(0, direction*lat_dist_dir);
-                    trajectory_points += " a "+turning_radius+","+turning_radius+" 90"+
-                                        " 0 "+CW+
-                                        " "+(lat_dist_dir*turning_radius)+","+(-1*direction*turning_radius)+
-                                        " l "+(lat_distance-2*lat_dist_dir*turning_radius)+",0"+
-                                        " a "+turning_radius+","+turning_radius+" 90"+
-                                        " 0 "+CW+
-                                        " "+(lat_dist_dir*turning_radius)+","+(direction*turning_radius)
-                                        //" "+lat_distance+","+(-1*direction*turning_radius)+
-                                        //" "+lat_distance+",0"
-                    trajectory_points += " l 0,"+(direction*track_length);
-                    direction *= -1;
+                    if (turning_model === turning_models.pi_cross) {
+                        trajectory_points += " a " + turning_radius + "," + turning_radius + " 90" +
+                            " 0 " + CW +
+                            " " + (lat_dist_dir * turning_radius) + "," + (-1 * direction * turning_radius) +
+                            " l " + (lat_distance - 2 * lat_dist_dir * turning_radius) + ",0" +
+                            " a " + turning_radius + "," + turning_radius + " 90" +
+                            " 0 " + CW +
+                            " " + (lat_dist_dir * turning_radius) + "," + (direction * turning_radius)
+                        //" "+lat_distance+","+(-1*direction*turning_radius)+
+                        //" "+lat_distance+",0"
+                        trajectory_points += " l 0," + (direction * track_length);
+                        direction *= -1;
+                    } else if (turning_model === turning_models.pi_open) {
+                        CW = CW===0?1:0;
+                        trajectory_points += " a " + turning_radius + "," + turning_radius + " 90" +
+                            " 0 " + CW +
+                            " " + (-lat_dist_dir * turning_radius) + "," + (-1 * direction * turning_radius) +
+                            " l " + (lat_distance - 2 * -lat_dist_dir * turning_radius) + ",0" +
+                            " a " + turning_radius + "," + turning_radius + " 90" +
+                            " 0 " + CW +
+                            " " + (-lat_dist_dir * turning_radius) + "," + (direction * turning_radius)
+                        //" "+lat_distance+","+(-1*direction*turning_radius)+
+                        //" "+lat_distance+",0"
+                        trajectory_points += " l 0," + (direction * track_length);
+                        direction *= -1;
+                    } else if (turning_model === turning_models.pi_sigma) {
+                        // TEST START
+                        // trajectory_points += " " + Math.round(0.5*machineWidth)+ "," + Math.round(2*headlandHeight);
+                        // TEST END
+                        let lat_distance = -(opt_pattern[i+1] - opt_pattern[i])*machineWidth;
+                        let lat_dist_dir = Math.abs(lat_distance)/lat_distance;
+                        CW = Math.max(0, direction*lat_dist_dir);
+
+                        trajectory_points += " a "+turning_radius+","+turning_radius+" "+ 90 +
+                            " 0 "+CW+
+                            " "+(-(turning_radius-turning_radius*Math.cos(sg_turn_ang_0)))+","+(-1*turning_radius*Math.sin(sg_turn_ang_0));
+                        CW = CW===0?1:0;
+                        trajectory_points += " a "+turning_radius+","+turning_radius+" "+ 90 +
+                            " 1 "+CW+
+                            " "+((2*turning_radius*Math.cos(sg_turn_ang_0)))+",0";
+                        CW = CW===0?1:0;
+                        trajectory_points += " a "+turning_radius+","+turning_radius+" "+ 90 +
+                            " 0 "+CW+
+                            " "+(-(turning_radius-turning_radius*Math.cos(sg_turn_ang_0)))+","+(turning_radius*Math.sin(sg_turn_ang_0));
+                        break;
+                    }
 
                     $("#trajectory").attr('d', trajectory_points);
+                }
 
+                end_node = {
+                    cx: (0.5 + opt_pattern[opt_pattern.length-1] - opt_pattern[0])*machineWidth,
+                    cy: headlandHeight,
+                    r: 1,
+                    fill: 'red',
+                    stroke: 'yellow', 'stroke-width': 0.25
+                };
+                if(opt_pattern.length%2) {
+                    end_node.cy = headlandHeight;
+                } else {
+                    end_node.cy = track_length + headlandHeight;
                 }
                 /*
                 trajectory_points += " c 0,-"+machineWidth+" "+machineWidth+",-"+machineWidth
@@ -200,6 +306,10 @@
 
                  */
                 $("#trajectory").attr('d', trajectory_points);
+                $("#info_panel").append("<div>Trajectory_d: "+trajectory_points+" m</div>");
+
+                nodes.appendChild(getNode('circle', start_node));
+                nodes.appendChild(getNode('circle', end_node));
                 //$("#output_img").attr('src', svg2img("#viewport"));
                 return false;
             });
@@ -258,6 +368,14 @@
                             <option value="se">SE</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label for="RearAdjustment">Rear Adjustment (m)</label>
+                        <input type="number" class="form-control" id="RearAdjustment" placeholder="Rear adjustment in m" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="FrontAdjustment">Front Adjustment (m)</label>
+                        <input type="number" class="form-control" id="FrontAdjustment" placeholder="Front adjustment in m" step="0.1">
+                    </div>
                     <div class="form-group row">
                         <div class="col-sm-6">
                             <button type="submit" class="btn btn-primary">Generate</button>
@@ -266,18 +384,27 @@
                             <button type="submit" class="btn btn-primary">Save Image</button>
                         </div-->
                     </div>
+                    <div class="form-group row">
+                        <div id="info_panel" class="col-sm-6">
+                        </div>
+                    </div>
                 </form>
                 <img id="output_img" class="m-3" height="100" />
             </div>
             <div class="col-8">
                 <h4></h4>
                 <svg id="viewport" viewBox="0 0 180 120" xmlns="http://www.w3.org/2000/svg">
-                    <rect id="field_bounds" width="120" height="120" fill="#00aa00" style="margin-top: 2px" />
+                    <rect id="field_bounds" width="120" height="120" fill="#996633" style="margin-top: 2px" />
                     <g id="guided_lines"></g>
                     <!--polyline id="trajectory" points="0,0 50,25 50,75 100,0"
                               fill="none" stroke="yellow" /-->
                     <path id="trajectory" d=""
-                              fill="none" stroke="yellow" stroke-width="1" />
+                              fill="none" stroke="yellow" stroke-width="0.5" />
+                    <path id="start_trajectory" d="" fill="none" stroke="yellow"
+                          stroke-width="0.5" stroke-dasharray="2 2" />
+                    <path id="end_trajectory" d="" fill="none" stroke="yellow"
+                          stroke-width="0.5" stroke-dasharray="2 2" />
+                    <g id="nodes"></g>
                 </svg>
             </div>
         </div>
